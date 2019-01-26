@@ -8,10 +8,12 @@ import itertools
 from utils import *
 
 class Cholesky(torch.autograd.Function):
+    @staticmethod
     def forward(ctx, a):
         l = torch.potrf(a, False)
         ctx.save_for_backward(l)
         return l
+    @staticmethod
     def backward(ctx, grad_output):
         l, = ctx.saved_variables
         linv = l.inverse()
