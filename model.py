@@ -124,24 +124,13 @@ class DaGMM(nn.Module):
 
         z_mu = (z.unsqueeze(1)- mu.unsqueeze(0))
 
-        cov_inverse = []
-        det_cov = []
-        cov_diag = 0
         eps = 1e-12
-        for i in range(k):
-            # K x D x D
-            cov_k = cov[i] + to_var(torch.eye(D)*eps)
-            cov_inverse.append(torch.inverse(cov_k).unsqueeze(0))
-
-            #det_cov.append(np.linalg.det(cov_k.data.cpu().numpy()* (2*np.pi)))
-            det_cov.append((Cholesky.apply(cov_k.cpu() * (2*np.pi)).diag().prod()).unsqueeze(0))
-            cov_diag = cov_diag + torch.sum(1 / cov_k.diag())
-
+        cov_K = cov + to_var(torch.cat([torch.eye(D).unsqueeze(0) for i in range(k)])) * eps
+        det_cov = torch.prod(torch.cholesky(cov_K*2*np.pi)[:, range(D), range(D)], dim=1)
         # K x D x D
-        cov_inverse = torch.cat(cov_inverse, dim=0)
+        cov_inverse = torch.inverse(cov_K)
         # K
-        det_cov = torch.cat(det_cov).cuda()
-        #det_cov = to_var(torch.from_numpy(np.float32(np.array(det_cov))))
+        cov_diag = torch.sum(1 / cov_K[:, range(D), range(D)])
 
         # N x K
         exp_term_tmp = -0.5 * torch.sum(torch.sum(z_mu.unsqueeze(-1) * cov_inverse.unsqueeze(0), dim=-2) * z_mu, dim=-1)
