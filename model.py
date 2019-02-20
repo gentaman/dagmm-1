@@ -124,24 +124,28 @@ class DaGMM(nn.Module):
 
         z_mu = (z.unsqueeze(1)- mu.unsqueeze(0))
 
-        eps = 1e-12
+        eps = 1e-6
         cov_K = cov + to_var(torch.cat([torch.eye(D).unsqueeze(0) for i in range(k)])) * eps
-        det_cov = torch.prod(torch.cholesky(cov_K*2*np.pi)[:, range(D), range(D)], dim=1)
-        # K x D x D
+        L = torch.cholesky(cov_K)
+        v = torch.einsum('ijk,jnk->ijn', z_mu, torch.inverse(L))
+        det_cov = torch.prod(L[:, range(D), range(D)], dim=1) * (2*np.pi)**D
         cov_inverse = torch.inverse(cov_K)
-        # K
         cov_diag = torch.sum(1 / cov_K[:, range(D), range(D)])
 
         # N x K
-        exp_term_tmp = -0.5 * torch.sum(torch.sum(z_mu.unsqueeze(-1) * cov_inverse.unsqueeze(0), dim=-2) * z_mu, dim=-1)
+#         exp_term_tmp = -0.5 * torch.sum(torch.sum(z_mu.unsqueeze(-1) * cov_inverse.unsqueeze(0), dim=-2) * z_mu, dim=-1)
+        exp_term_tmp = -0.5 * torch.einsum('ijk,ijk->ij', v, v)
+    
         # for stability (logsumexp)
-        max_val = torch.max((exp_term_tmp).clamp(min=0), dim=1, keepdim=True)[0]
+#         max_val = torch.max((exp_term_tmp).clamp(min=0), dim=1, keepdim=True)[0]
 
-        exp_term = torch.exp(exp_term_tmp - max_val)
+#         exp_term = torch.exp(exp_term_tmp - max_val)
+        exp_term = torch.exp(exp_term_tmp)
 
         # sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (det_cov).unsqueeze(0), dim = 1) + eps)
-        sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (torch.sqrt(det_cov)).unsqueeze(0), dim = 1) + eps)
+#         sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (torch.sqrt(det_cov)).unsqueeze(0), dim = 1) + eps)
         # sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (torch.sqrt((2*np.pi)**D * det_cov)).unsqueeze(0), dim = 1) + eps)
+        sample_energy = - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (torch.sqrt(det_cov)).unsqueeze(0), dim = 1) + eps)
 
 
         if size_average:
